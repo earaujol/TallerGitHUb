@@ -1,0 +1,81 @@
+name: Notificación de Creación de Rama
+
+on:
+  create:
+    branches:
+      - '**'
+
+jobs:
+  notify-admins:
+    runs-on: ubuntu-latest
+    if: github.ref_type == 'branch'
+    
+    steps:
+      - name: Notificar a administradores sobre nueva rama
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const branchName = context.ref;
+            const creator = context.actor;
+            const repoName = context.repo.repo;
+            const owner = context.repo.owner;
+            
+            try {
+              await github.rest.issues.create({
+                owner: owner,
+                repo: repoName,
+                title: 'Nueva rama creada: ' + branchName,
+                body: '## Notificación de Creación de Rama\n\n' +
+                      '**Rama creada:** `' + branchName + '`\n' +
+                      '**Creada por:** @' + creator + '\n' +
+                      '**Fecha:** ' + new Date().toISOString() + '\n' +
+                      '**Repositorio:** ' + owner + '/' + repoName + '\n\n' +
+                      '---\n\n' +
+                      '### Acción Requerida\n' +
+                      '@earaujol - Por favor revisen esta nueva rama.\n\n' +
+                      '### Información\n' +
+                      '- Si esta rama es válida y autorizada, cierren este issue.\n' +
+                      '- Si esta rama no fue autorizada, consideren eliminarla.\n\n' +
+                      '---\n\n' +
+                      '**Enlace:** [Ver rama ' + branchName + '](https://github.com/' + owner + '/' + repoName + '/tree/' + branchName + ')',
+                labels: ['branch-creation', 'requires-admin-review', 'notification'],
+                assignees: ['earaujol']
+              });
+              
+              console.log('Notificación creada exitosamente');
+            } catch (error) {
+              console.error('Error al crear la notificación:', error.message);
+            }
+
+      - name: Comentar en el último commit de la rama
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const branchName = context.ref;
+            
+            try {
+              const { data: branch } = await github.rest.repos.getBranch({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                branch: branchName
+              });
+              
+              const commitSha = branch.commit.sha;
+              
+              await github.rest.repos.createCommitComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                commit_sha: commitSha,
+                body: 'Notificación Automática\n\n' +
+                      'Esta rama ha sido creada y los administradores (@earaujol) han sido notificados.\n\n' +
+                      'Recordatorio: Todas las ramas deben seguir las políticas del repositorio.'
+              });
+              
+              console.log('Comentario agregado al commit');
+            } catch (error) {
+              console.error('Error al comentar en el commit:', error.message);
+            }
+
+# Made with Bob
